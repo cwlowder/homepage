@@ -5,6 +5,26 @@ import yaml from "js-yaml";
 
 import checkAndCopyConfig, { CONF_DIR, substituteEnvironmentVars } from "utils/config/config";
 
+// map easy to write YAML objects into easy to consume JS arrays
+function parseSubWidgets(rawWidgets, parent) {
+  return rawWidgets.map((raw, index) => {
+    if (parent && parent.type === "animated") {
+      index = parent.options.index + '-' + index;
+    }
+
+    const type = Object.keys(raw)[0];
+    let options = raw[Object.keys(raw)[0]];
+
+    return {
+      type: type,
+      options: {
+        index,
+        ...options,
+      },
+    };
+  });
+}
+
 export async function widgetsFromConfig() {
   checkAndCopyConfig("widgets.yaml");
 
@@ -16,17 +36,27 @@ export async function widgetsFromConfig() {
   if (!widgets) return [];
 
   // map easy to write YAML objects into easy to consume JS arrays
-  const widgetsArray = widgets.map((group, index) => ({
-    type: Object.keys(group)[0],
-    options: {
-      index,
-      ...group[Object.keys(group)[0]],
-    },
-  }));
+  const widgetsArray = widgets.map((group, index) => {
+    const type = Object.keys(group)[0];
+    let options = group[Object.keys(group)[0]]
+
+    if (type === "animated" && options.widgets) {
+      options.widgets = parseSubWidgets(options.widgets, {options: {index}, type})
+    }
+
+    return{
+      type: Object.keys(group)[0],
+      options: {
+        index,
+        ...options,
+      },
+    }
+  });
+
   return widgetsArray;
 }
 
-export async function cleanWidgetGroups(widgets) {
+export async function cleanWidgetGroups(widgets, parent) {
   return widgets.map((widget, index) => {
     const sanitizedOptions = widget.options;
     const optionKeys = Object.keys(sanitizedOptions);
@@ -43,6 +73,24 @@ export async function cleanWidgetGroups(widgets) {
       delete sanitizedOptions.url;
     }
 
+    // Cleanup animated widgets
+    if (widget.type === "animated" && widget.options.widgets) {
+      const subWidgets = widget.options.widgets.map((raw, subIndex) => {
+        return {
+          type: raw.type,
+          options: {
+            index: index + '-' + subIndex,
+            ...raw.options,
+          }
+        };
+      });
+      cleanWidgetGroups(subWidgets, index);
+    }
+
+    if (parent !== undefined) {
+      index = parent + '-' + index;
+    }
+
     return {
       type: widget.type,
       options: {
@@ -53,11 +101,13 @@ export async function cleanWidgetGroups(widgets) {
   });
 }
 
-export async function getPrivateWidgetOptions(type, widgetIndex) {
-  const widgets = await widgetsFromConfig();
-
-  const privateOptions = widgets.map((widget) => {
+function compilePrivateWidgetOptions(widgets) {
+  return widgets.flatMap((widget) => {
     const { index, url, username, password, key, apiKey } = widget.options;
+
+    if (widget.type === "animated" && widget.options.widgets) {
+      return compilePrivateWidgetOptions(widget.options.widgets);
+    }
 
     return {
       type: widget.type,
@@ -71,8 +121,14 @@ export async function getPrivateWidgetOptions(type, widgetIndex) {
       },
     };
   });
+}
+
+export async function getPrivateWidgetOptions(type, widgetIndex) {
+  const widgets = await widgetsFromConfig();
+
+  const privateOptions = compilePrivateWidgetOptions(widgets);
 
   return type !== undefined && widgetIndex !== undefined
-    ? privateOptions.find((o) => o.type === type && o.options.index === parseInt(widgetIndex, 10))?.options
+    ? privateOptions.find((o) => o.type === type && (o.options.index === parseInt(widgetIndex, 10) || o.options.index === widgetIndex))?.options
     : privateOptions;
 }

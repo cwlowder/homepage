@@ -439,7 +439,7 @@ function Home({ initialSettings }) {
             {widgets && (
               <>
                 {widgets
-                  .filter((widget) => !rightAlignedWidgets.includes(widget.type))
+                  .filter((widget) => !widget.options.isRightAligned || widget.options.isRightAligned === undefined && !rightAlignedWidgets.includes(widget.type))
                   .map((widget, i) => (
                     <Widget
                       key={i}
@@ -456,7 +456,7 @@ function Home({ initialSettings }) {
                   )}
                 >
                   {widgets
-                    .filter((widget) => rightAlignedWidgets.includes(widget.type))
+                    .filter((widget) => widget.options.isRightAligned || widget.options.isRightAligned === undefined && rightAlignedWidgets.includes(widget.type))
                     .map((widget, i) => (
                       <Widget
                         key={i}

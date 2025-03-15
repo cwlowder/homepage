@@ -20,6 +20,9 @@
         "minutes": "m",
         "seconds": "s"
     },
+    "animate": {
+        "cannot": "Cannot Animate"
+    },
     "widget": {
         "missing_type": "Missing Widget Type: {{type}}",
         "api_error": "API Error",
